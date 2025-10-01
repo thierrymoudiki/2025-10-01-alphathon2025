@@ -12,7 +12,7 @@ The synthetic data generated:
 
 [https://github.com/Techtonique/datasets/blob/main/time_series/multivariate/synthetic_stock_returns.csv](https://github.com/Techtonique/datasets/blob/main/time_series/multivariate/synthetic_stock_returns.csv)
 
-The API: 
+The API ([its code](/plumberAPI)): 
 
 [https://pretrainedridge2f-8aee3d9572cc.herokuapp.com/__docs__/](https://pretrainedridge2f-8aee3d9572cc.herokuapp.com/__docs__/)
 
