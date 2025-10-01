@@ -1,0 +1,8 @@
+aiohttp
+fastapi
+uvicorn
+numpy
+jinja2
+python-multipart
+pandas
+websockets

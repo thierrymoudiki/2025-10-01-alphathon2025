@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Pricing Dashboard</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: black;
+            color: #ffffff;
+            margin: 0;
+            padding: 10px;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .dashboard {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        h1 {
+            margin: 0;
+            padding: 10px 0;
+            font-size: 1.5em;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .controls {
+            flex-shrink: 0;
+            text-align: center;
+            padding: 5px 0;
+        }
+        .btn {
+            background: #90ee90;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .btn:hover {
+            background: #76d876;
+        }
+        .btn-stop {
+            background: #ff6b6b;
+            color: white;
+        }
+        .btn-stop:hover {
+            background: #ff5252;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .stat-card {
+            *background: #2d2d2d;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-card div:first-child {
+            font-size: 0.8em;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+        .stat-value {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #90ee90;
+        }
+        .charts-container {
+            flex: 0.93;
+            display: flex;
+            gap: 10px;
+            min-height: 0;
+        }
+        .chart-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .chart-header {
+            padding: 8px 12px;
+            background: #3d3d3d;
+            font-weight: bold;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+        .chart-area {
+            flex: 1;
+            min-height: 0;
+            padding: 5px;
+        }
+        .chart-area > div {
+            height: 100% !important;
+            width: 100% !important;
+        }
+        .status-bar {
+            background: #2d2d2d;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85em;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .status-label {
+            opacity: 0.8;
+        }
+        #status {
+            font-weight: bold;
+        }
+        #status[style*="90ee90"] { color: #90ee90; }
+        #status[style*="ffa500"] { color: #ffa500; }
+        #status[style*="ff6b6b"] { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Structured Product Pricing Dashboard</h1>
+        
+        <div class="controls">
+            <button class="btn" onclick="startStreaming()">Start Streaming</button>
+            <button class="btn btn-stop" onclick="stopStreaming()">Stop Streaming</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div>Product Price</div>
+                <div class="stat-value" id="productPrice">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div>Expected Final Value</div>
+                <div class="stat-value" id="finalValue">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div>Lapse Rate</div>
+                <div class="stat-value" id="lapseRate">0.0%</div>
+            </div>
+            <div class="stat-card">
+                <div>Simulation Paths</div>
+                <div class="stat-value" id="simPaths">0</div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-wrapper">                
+                <div class="chart-area">
+                    <div id="priceDistributionChart"></div>
+                </div>
+            </div>
+            <div class="chart-wrapper">                
+                <div class="chart-area">
+                    <div id="accountEvolutionChart"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Status:</span>
+                <span id="status">Ready</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Progress:</span>
+                <span id="progress">0/20</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Last Update:</span>
+                <span id="lastUpdate">Never</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chart instances
+        let priceDistributionChart, accountEvolutionChart;
+        let websocket = null;
+        let isStreaming = false;
+
+        // Initialize charts
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+        });
+
+        function initializeCharts() {
+            // Price Distribution Chart - Clean version
+            priceDistributionChart = Highcharts.chart('priceDistributionChart', {
+                chart: { 
+                    type: 'area', 
+                    backgroundColor: 'transparent',
+                    height: '100%'
+                },
+                title: { 
+                    text: 'Product Price Distribution', 
+                    style: { color: '#ffffff', fontSize: '14px' } 
+                },
+                subtitle: { 
+                    text: 'Distribution of present values', 
+                    style: { color: '#cccccc', fontSize: '12px' } 
+                },
+                xAxis: { 
+                    title: { enabled: false },
+                    labels: { enabled: false },
+                    lineWidth: 0,
+                    tickLength: 0
+                },
+                yAxis: { 
+                    title: { enabled: false },
+                    labels: { enabled: false },
+                    gridLineWidth: 0,
+                    lineWidth: 0,
+                    tickLength: 0
+                },
+                legend: { enabled: false },
+                tooltip: { enabled: false },
+                plotOptions: {
+                    area: {
+                        marker: {
+                            enabled: false
+                        },
+                        lineWidth: 2,
+                        fillOpacity: 0.5
+                    }
+                },
+                series: [{
+                    name: 'Price Density',
+                    type: 'area',
+                    color: 'rgba(255, 105, 180, 0.6)',
+                    data: []
+                }],
+                credits: { enabled: false }
+            });
+
+            // Account Evolution Chart - Clean version
+            accountEvolutionChart = Highcharts.chart('accountEvolutionChart', {
+                chart: { 
+                    type: 'arearange', 
+                    backgroundColor: 'transparent',
+                    height: '100%'
+                },
+                title: { 
+                    text: 'Account Value Evolution', 
+                    style: { color: '#ffffff', fontSize: '14px' } 
+                },
+                subtitle: { 
+                    text: '5th-95th percentile range with median', 
+                    style: { color: '#cccccc', fontSize: '12px' } 
+                },
+                xAxis: { 
+                    title: { enabled: false },
+                    labels: { enabled: false },
+                    lineWidth: 0,
+                    tickLength: 0
+                },
+                yAxis: { 
+                    title: { enabled: false },
+                    labels: { enabled: false },
+                    gridLineWidth: 0,
+                    lineWidth: 0,
+                    tickLength: 0
+                },
+                legend: { enabled: false },
+                tooltip: { enabled: false },
+                plotOptions: {
+                    arearange: {
+                        marker: {
+                            enabled: false
+                        },
+                        lineWidth: 0
+                    },
+                    line: {
+                        marker: {
+                            enabled: false
+                        },
+                        lineWidth: 2
+                    }
+                },
+                series: [{
+                    name: '90% Confidence Interval',
+                    type: 'arearange',
+                    color: 'rgba(144, 238, 144, 0.3)',
+                    fillOpacity: 0.5,
+                    lineWidth: 0,
+                    data: []
+                }, {
+                    name: 'Median',
+                    type: 'line',
+                    color: '#32cd32',
+                    lineWidth: 2,
+                    data: []
+                }],
+                credits: { enabled: false }
+            });
+        }
+
+        // Add window resize handler
+        window.addEventListener('resize', function() {
+            if (priceDistributionChart) {
+                priceDistributionChart.reflow();
+            }
+            if (accountEvolutionChart) {
+                accountEvolutionChart.reflow();
+            }
+        });
+
+        function startStreaming() {
+            if (isStreaming) return;
+            
+            isStreaming = true;
+            updateStatus('Connecting...', 'warning');
+            
+            // Create WebSocket connection
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/pricing`;
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function() {
+                updateStatus('Streaming Active', 'success');
+            };
+            
+            websocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                updateDashboard(data);
+            };
+            
+            websocket.onclose = function() {
+                isStreaming = false;
+                updateStatus('Streaming Stopped', 'warning');
+            };
+            
+            websocket.onerror = function(error) {
+                isStreaming = false;
+                updateStatus('Connection Error', 'error');
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function stopStreaming() {
+            if (websocket) {
+                websocket.close();
+            }
+            isStreaming = false;
+            updateStatus('Ready', 'info');
+        }
+
+        function updateDashboard(data) {
+            // Update statistics
+            document.getElementById('productPrice').textContent = `$${data.price.toFixed(2)}`;
+            document.getElementById('finalValue').textContent = `$${data.statistics.final_value_mean.toFixed(2)}`;
+            document.getElementById('lapseRate').textContent = `${(data.statistics.expected_lapse_rate * 100).toFixed(1)}%`;
+            document.getElementById('simPaths').textContent = data.statistics.total_paths.toLocaleString();
+            
+            // Update progress
+            document.getElementById('progress').textContent = `${data.update_count}/20`;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Update price distribution chart
+            const priceData = data.price_distribution.bin_centers.map((x, i) => [
+                x, data.price_distribution.density[i]
+            ]);
+            priceDistributionChart.series[0].setData(priceData);
+            priceDistributionChart.setTitle({ 
+                text: `Product Price Distribution - Update ${data.update_count}/20` 
+            });
+            
+            // Update account evolution chart
+            const accountData = data.account_evolution;
+            const confidenceData = accountData.time_points.map((x, i) => [
+                x, accountData.lower_bound[i], accountData.upper_bound[i]
+            ]);
+            const medianData = accountData.time_points.map((x, i) => [
+                x, accountData.median_vals[i]
+            ]);
+            
+            accountEvolutionChart.series[0].setData(confidenceData);
+            accountEvolutionChart.series[1].setData(medianData);
+            accountEvolutionChart.setTitle({ 
+                text: `Account Value Evolution - Update ${data.update_count}/20` 
+            });
+        }
+
+        function updateStatus(message, type) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.style.color = 
+                type === 'success' ? '#90ee90' : 
+                type === 'warning' ? '#ffa500' : 
+                type === 'error' ? '#ff6b6b' : '#ffffff';
+        }
+    </script>
+</body>
+</html>
